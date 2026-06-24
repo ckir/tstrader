@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Design tokens — dark "Checkmate-style" ops theme. Exposed as Tailwind
+   utilities (bg-bg, text-muted, border-border, …) via Tailwind v4 @theme. */
+@theme {
+  --color-bg: #0b0e14;
+  --color-surface: #11151c;
+  --color-border: #1f2630;
+  --color-text: #c7d0db;
+  --color-muted: #7a8696;
+  --color-accent: #3b82f6;
+  --color-positive: #16a34a;
+  --color-negative: #dc2626;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
