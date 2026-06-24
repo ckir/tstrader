@@ -1,0 +1,17 @@
+{
+  "name": "@repo/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run",
+    "test:unit:bun": "bun test"
+  },
+  "dependencies": {
+    "@ckirg/corelib": "0.1.22",
+    "@repo/types": "workspace:*"
+  }
+}
