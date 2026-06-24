@@ -53,10 +53,13 @@ account; the rename to `@ckirg` is what unblocked publishing.)*
 
 ## 3. Common Logger (decision)
 
-All apps use corelib's pino `logger` as the **single common logger**.
-⚠ **OPEN FORK (§5):** when `frontend` becomes a real UI (e.g. Next.js), importing `@ckirg/corelib` risks
-bundling the native addon into the browser/edge build. Decouple via a browser-safe `@repo/logger` seam —
-deferred until the frontend framework is chosen.
+All apps use corelib's `logger` as the **single common logger** (same `StrictLogger` call-shape everywhere).
+✅ **RESOLVED (browser safety):** corelib already declares package `exports` conditions —
+`{ "browser": "./dist/browser.js", "default": "./dist/index.js" }`. The **`browser`** entry is a zero-Node,
+addon-free console logger; the **`default`** entry carries pino + the native addon. So the Svelte+Vite
+frontend imports `@ckirg/corelib` directly and the bundler resolves the safe build — **no `@repo/logger`
+wrapper needed**. A build guard asserts the client bundle has no native-addon reference. See
+[`docs/architecture/frontend.md §5`](docs/architecture/frontend.md).
 
 ## 4. Testing & Runtime Matrix (this repo)
 

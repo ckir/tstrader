@@ -54,11 +54,31 @@ Design: [`docs/architecture/processmanager.md`](docs/architecture/processmanager
 
 ---
 
-## Track B — frontend (trading UI) *(next spec)*
+## Track B — frontend (trading UI)
 
-Own brainstorm → spec → plan. Inherits the **Svelte + Vite** baseline set in Track A Phase 3; decides
-whether the trading UI needs more (e.g. SvelteKit), charting, and the browser-safe `@repo/logger` seam
-(ARCHITECTURE.md §3).
+Design: [`docs/architecture/frontend.md`](docs/architecture/frontend.md). **Co-developed with `backend`** —
+data contracts firm up as backend grows, not before. Stack locked: **Svelte + Vite SPA** + a tested client
+router, **Tailwind + tokens**, logging via corelib's **`browser` export condition** (no `@repo/logger`
+wrapper — resolves ARCHITECTURE.md §3).
+
+### Phase B1 — App shell ← start here, keep light
+- Svelte + Vite SPA scaffold; **left sidebar nav + main content** region; dark Checkmate-style theme via
+  Tailwind + design tokens; pinned client router (placeholder routes for the candidate IA).
+- `import { logger } from "@ckirg/corelib"` (Vite resolves the browser console logger) + a **build guard**
+  test asserting the client bundle has **no `corelib-rust` / native-addon** reference.
+
+### Phase B2 — Observation Deck (read-only, v1)
+- Read-only views: positions, P&L, market data, strategy state, **process health** (from the PM).
+- REST clients to **`backend` + `processmanager`**; **WS** live updates wired in.
+- WS messages defined as **typed, versioned events in `packages/types`**; deck **reduces** them into view
+  state (anticipates Track C event-sourcing — see frontend.md §4). **No order entry.**
+
+### Phase B3 — Live polish & charts *(as needed)*
+- Charting lib chosen with the first chart panel; WS reconnect/backfill (snapshot-on-connect + replay).
+
+### Phase B4 — Interactive cockpit *(gated on Track C)*
+- Order entry/cancel + strategy start/stop layered onto the proven shell. **Requires Track C contracts**
+  (money/decimal, validation, idempotency, order state machine) — the UI stays out of the money-path until then.
 
 ## Track C — trading domain *(separate brainstorm)*
 
