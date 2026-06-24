@@ -8,7 +8,7 @@
     "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --passWithNoTests",
-    "test:unit:bun": "bun test"
+    "test:unit:bun": "bun test --pass-with-no-tests"
   },
   "dependencies": {
     "@ckirg/corelib": "0.1.22"
