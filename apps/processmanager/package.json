@@ -6,9 +6,17 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "bun run src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:unit:bun": "bun test --pass-with-no-tests"
+  },
+  "bin": {
+    "tstrader": "./src/cli.ts"
   },
   "dependencies": {
-    "@ckirg/corelib": "0.1.22"
+    "@ckirg/corelib": "0.1.22",
+    "citty": "0.2.2",
+    "confbox": "0.2.4",
+    "hono": "4.12.27"
   }
 }

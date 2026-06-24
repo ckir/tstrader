@@ -1,0 +1,19 @@
+// Services supervised by the processmanager daemon.
+// contract: "full"        — honours the child contract (NDJSON, SIGTERM->flush->exit 3, /health)
+// contract: "best-effort" — supervised, but no exit-3/health expectation (e.g. vite)
+[
+  {
+    name: "backend",
+    cmd: ["bun", "run", "start"],
+    cwd: "apps/backend",
+    contract: "full",
+    autostart: true,
+  },
+  {
+    name: "frontend",
+    cmd: ["bun", "run", "dev"],
+    cwd: "apps/frontend",
+    contract: "best-effort",
+    autostart: true,
+  },
+]

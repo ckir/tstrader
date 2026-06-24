@@ -15,3 +15,7 @@ test-results/
 # AI agent tooling caches
 .agent/
 .serena/
+
+# processmanager log sink
+.logs/
+*.ndjson
