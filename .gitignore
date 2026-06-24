@@ -11,3 +11,7 @@ coverage/
 # Playwright (later increment)
 playwright-report/
 test-results/
+
+# AI agent tooling caches
+.agent/
+.serena/
