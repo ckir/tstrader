@@ -1,0 +1,14 @@
+# Local Git gatekeeper (installed via the root `prepare` script on `bun install`).
+pre-commit:
+  parallel: true
+  commands:
+    secretlint:
+      run: bun run secure
+    biome:
+      glob: "*.{ts,tsx,js,json,jsonc}"
+      run: bun run lint
+
+pre-push:
+  commands:
+    gatekeeper:
+      run: bun run gatekeeper

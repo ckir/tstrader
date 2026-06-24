@@ -9,7 +9,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ckirg/corelib": "0.1.22",
-    "@repo/types": "workspace:*"
+    "@ckirg/corelib": "0.1.22"
   }
 }

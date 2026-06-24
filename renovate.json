@@ -1,0 +1,7 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "rangeStrategy": "pin",
+  "lockFileMaintenance": { "enabled": true },
+  "packageRules": [{ "matchDepTypes": ["devDependencies"], "groupName": "dev dependencies" }]
+}

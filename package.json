@@ -9,23 +9,43 @@
     "packages/*"
   ],
   "scripts": {
+    "prepare": "lefthook install",
+    "dev:backend": "dotenvx run -- bun --filter @repo/backend start",
+    "dev:frontend": "dotenvx run -- bun --filter @repo/frontend start",
+    "dev:processmanager": "dotenvx run -- bun --filter @repo/processmanager start",
     "build": "turbo run build",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "sync:check": "syncpack lint",
+    "sync:fix": "syncpack fix-mismatches",
+    "sweep": "knip",
+    "secure": "secretlint \"**/*\"",
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",
-    "test:unit:bun": "turbo run test:unit:bun"
+    "test:unit:bun": "turbo run test:unit:bun",
+    "test:e2e": "dotenvx run -- turbo run test:e2e",
+    "test:e2e:ui": "dotenvx run -- turbo run test:e2e:ui",
+    "dotenvx": "dotenvx",
+    "gatekeeper": "bun run secure && bun run sync:check && bun run lint && bun run sweep && turbo run typecheck test:unit"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.1",
+    "@changesets/cli": "^2.31.0",
+    "@dotenvx/dotenvx": "^1.75.1",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
     "@types/node": "^26.0.0",
     "bun-types": "^1.3.14",
     "fast-check": "^4.8.0",
+    "knip": "^6.20.0",
+    "lefthook": "^2.1.9",
+    "secretlint": "^13.0.2",
+    "syncpack": "^15.3.2",
     "turbo": "^2.9.18",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   },
   "trustedDependencies": [
-    "@ckirg/corelib"
+    "@ckirg/corelib",
+    "lefthook"
   ]
 }

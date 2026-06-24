@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  gatekeeper:
+    name: Clean-Room Gatekeeper (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.8
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # @ckirg/corelib is trusted -> its postinstall fetches the native binary during install.
+      # Clearing GITHUB_ACTIONS + MODE=production defeats corelib's CI self-skip (§10/§11.3).
+      - name: Install (provision native binary)
+        env:
+          GITHUB_ACTIONS: ""
+          MODE: production
+        run: bun install --frozen-lockfile
+      - run: bun run secure
+      - run: bun run sync:check
+      - run: bun run lint
+      - run: bun run sweep
+      - run: bun run typecheck
+
+  matrix:
+    name: Tests (${{ matrix.os }} / ${{ matrix.runtime }})
+    needs: gatekeeper
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        runtime: [bun, node]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.8
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install (provision native binary)
+        env:
+          GITHUB_ACTIONS: ""
+          MODE: production
+        run: bun install --frozen-lockfile
+      - name: Test (${{ matrix.runtime }})
+        run: ${{ matrix.runtime == 'bun' && 'bun run test:unit:bun' || 'bun run test:unit' }}
