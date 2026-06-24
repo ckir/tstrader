@@ -9,6 +9,7 @@
 > matching persona (default: **Principal Systems Architect**), and respond in character. Full catalog:
 > [`docs/architecture/AI_Personas_Framework.md`](docs/architecture/AI_Personas_Framework.md).
 
+**Coding mandates (MUST follow when writing code):** [`.agents/coding-mandates.md`](.agents/coding-mandates.md).
 **Monorepo conventions:** `MONOREPOARCHITECTURE.md` (§7 Agent Directives — Bun only, pinned root
 devDeps, Bun-shell scripts, never touch `.env.keys` / never gitignore `.env`).
 **Project specifics:** `ARCHITECTURE.md`.
