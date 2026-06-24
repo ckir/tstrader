@@ -12,7 +12,7 @@ tstrader**: its workspaces, its external `corelib` foundation, and the open trad
 
 | Workspace | Internal name | Role | Primary runtime | Local on Windows | Deploy |
 | --- | --- | --- | --- | --- | --- |
-| `apps/backend` | `@repo/backend` | API + trading/strategy logic; indicator math (`sma`/`closes`) **currently** lives here (see fork §5) | Bun | Yes | **linux-x64** |
+| `apps/backend` | `@repo/backend` | API + trading/strategy logic | Bun | Yes | **linux-x64** |
 | `apps/frontend` | `@repo/frontend` | UI (Playwright-tested) | Bun/Node | Yes | Any |
 | `apps/processmanager` | `@repo/processmanager` | Long-running workers/schedulers (corelib streaming/croner); intended host of the supervisor / kill-switch (fork §5) | Bun | Yes | **linux-x64** |
 | `packages/types` | `@repo/types` | Shared cross-app contracts (`Candle`, `OrderIntent`, …) | n/a (types) | Yes | n/a |
@@ -63,9 +63,11 @@ wrapper needed**. A build guard asserts the client bundle has no native-addon re
 
 ## 4. Testing & Runtime Matrix (this repo)
 
-Per base §4, the shared suite runs under **both** Node (vitest) and Bun (`bun test`) via the runtime shim
-at `apps/backend/src/test-harness.ts`; `fast-check` property tests guard the indicators. CI = 3 OS ×
-{bun,node} (verified green in the cloud).
+Per base §4, the cross-runtime convention (vitest + `bun test`) is retained in the backend's test scripts
+(`test:unit` uses `--passWithNoTests` until suites return with Track B2 / Track C). *(The skeleton
+`sma`/`closes` indicators, their `fast-check` property suite, and the runtime-shim `test-harness.ts` were
+removed; `fast-check` will be re-added with the next property suite — a deviation from the base-doc stack
+until then.)* CI = 3 OS × {bun,node} (verified green in the cloud).
 ⚠ **OPEN FORK (§5):** the **bun×node** axis is only justified if a **Node production target** exists; the
 **3-OS** axis is always valuable (per-OS native binary + Windows quirks). Revisit with the Bun-vs-Node
 production-runtime decision. **Playwright** targets `frontend` + `processmanager` (specs deferred).
@@ -90,10 +92,10 @@ domain design, not skeleton code:
    time, monotonic timestamps. Wrap corelib's chrono/croner; no ad-hoc `Date.now()`.
 7. **Broker/exchange adapters** — behind a port; MSW-mocked in tests; chaos cases (partial fills, rejects,
    timeouts, WS reconnect with sequence-gap detection, rate-limiting/backpressure).
-8. **`packages/core` reconsideration** — move pure indicator math out of `backend` into a fuzzable
-   workspace importable by `frontend` for charting *without* the execution engine; add import-boundary
-   enforcement (Biome `noRestrictedImports` / dependency-cruiser). *(Reverses the current "no packages/core"
-   choice — decision pending.)*
+8. **`packages/core` reconsideration** — when indicator/strategy math is (re)introduced, decide whether
+   pure, fuzzable math lives in a `packages/core` importable by `frontend` for charting *without* the
+   execution engine, with import-boundary enforcement (Biome `noRestrictedImports` / dependency-cruiser).
+   *(The skeleton `sma`/`closes` placeholders were removed; current choice remains "no packages/core".)*
 9. **Bun vs Node as the production runtime** for money-touching long-running processes (maturity vs speed).
 10. **Frontend UI framework** (+ the logger decoupling in §3).
 11. **Audit trail / flight recorder** (corelib Epic-4) — record every *decision*, not just logs.
