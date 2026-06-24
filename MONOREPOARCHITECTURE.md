@@ -1,5 +1,5 @@
 # TSTRADER | SYSTEM ARCHITECTURE & DEVELOPMENT SPECIFICATION
-**Document Version:** 1.3.0
+**Document Version:** 1.4.0
 **Classification:** Public Open-Source Algorithmic Trading Monorepo
 **Primary Host Target:** Windows 11 (`pwsh`) [Uncluttered Host Policy]
 **Execution Targets:** Bun (Primary), Node.js (E2E + cross-runtime packages)
@@ -21,7 +21,7 @@
 > **Changelog 1.1.0 → 1.2.0** — Integrated the external **corelib** library as the
 > database/runtime foundation (new §11). Dropped Deno from the matrix (now Bun×Node, 6
 > permutations). Switched E2E from `cache:false` to deterministic-input caching (§10).
-> Deleted `packages/db` — the database now comes directly from `@ckir/corelib`
+> Deleted `packages/db` — the database now comes directly from `@ckirg/corelib`
 > (§2/§4/§8/§11). corelib is consumed via `bun link` locally and from
 > `github.com/ckir/corelib` in CI; its native Rust addon and `MODE`/CI postinstall
 > behavior drive new constraints (§11). Open forks marked **[DECISION]**.
@@ -34,6 +34,18 @@
 > agent-navigation directive (§7). **Deferred** the runtime-validation library choice
 > (Zod / ArkType / Valibot — Appendix A). Topology updated with `renovate.json`,
 > `.github/dependabot.yml`, and `.github/workflows/codeql.yml` (§2).
+
+> **Changelog 1.3.0 → 1.4.0** — Reconciled topology to the implemented walking skeleton:
+> workspaces are now **apps/{backend,frontend,processmanager} + packages/types** — no
+> `packages/core` (indicator logic lives in `apps/backend`) and no standalone `engine`/`dashboard`/`e2e`
+> apps. All three apps consume **`@ckirg/corelib`** (scope renamed from `@ckir`; now published to npm
+> `@0.1.22`) and use its `logger` as the **common logger** (§2/§4/§9/§11). §11.2 simplified to a plain
+> **registry install** now that corelib is published — dropped the `file:`/tarball sibling-checkout +
+> CI Job 0 machinery. §8 relaxed: all three apps **run locally on Windows** (corelib ships a win32-x64
+> binary); CI still runs the full Linux/macOS matrix; deploy target stays **linux-x64**. Playwright now
+> targets **frontend + processmanager** (§3/§4); detailed trading-loop / worker / e2e design is
+> deferred to a dedicated brainstorming. CI action versions mirror corelib's pipeline (checkout@v6,
+> setup-node@v6, oven-sh/setup-bun@v2, etc. — §10).
 
 ---
 
@@ -57,13 +69,13 @@ tstrader/
 │   │   └── release.yml            # Changesets versioning bot
 │   └── dependabot.yml             # Dependabot ALERTS only (version- AND security-updates OFF — Renovate owns CVE remediation)
 ├── apps/
-│   ├── engine/                    # Core trading loop [Target: Bun | OS: Linux]
-│   ├── dashboard/                 # Next.js / React UI [Target: Bun/Node | OS: Any]
-│   └── e2e/                       # Playwright browser sandbox [Target: Node | OS: Linux CI]
+│   ├── backend/                   # API + trading/strategy logic + indicators [Target: Bun | Deploy: linux-x64]
+│   ├── frontend/                  # UI (Playwright-tested) [Target: Bun/Node | OS: Any]
+│   └── processmanager/            # Long-running workers/schedulers (corelib streaming/croner), Playwright-tested [Target: Bun | Deploy: linux-x64]
 ├── packages/
-│   ├── core/                      # Pure math, indicators [Target: Bun/Node | OS: Any]
-│   └── types/                     # Exchange/Broker interfaces [Target: Agnostic]
-│                                  # NOTE: no packages/db — database comes from @ckir/corelib (§11)
+│   └── types/                     # Shared cross-app contracts (Candle, OrderIntent, …) [Target: Agnostic]
+│                                  # NOTE: no packages/core — indicator logic lives in apps/backend
+│                                  # NOTE: no packages/db — database comes from @ckirg/corelib (§11)
 ├── .env                           # Secrets, ENCRYPTED via dotenvx — COMMITTED to git
 ├── .env.keys                      # dotenvx private decryption keys — GITIGNORED (never committed)
 ├── .env.example                   # Public secret structural manifest
@@ -78,7 +90,7 @@ tstrader/
 ├── turbo.json                     # Task graph + cache input declarations (incl. env)
 └── vitest.workspace.ts            # Node-runtime test configuration (see §4 for Bun)
 
-# External dependency (NOT vendored here): @ckir/corelib — separate pnpm+nx repo at
+# External dependency (NOT vendored here): @ckirg/corelib — separate pnpm+nx repo at
 # github.com/ckir/corelib. Provides DB clients (libSQL + postgres) and a native Rust addon. See §11.
 ```
 
@@ -100,25 +112,24 @@ one-off, throwaway invocations that never enter `package.json` or CI.
 | **Task Orchestration** | Turborepo | `turbo <task>` (pinned bin) | Caches DAG step outputs; prunes unchanged workspaces. Executor runs each script via the package manager — **keep package scripts shell-builtin-free** (Axiom 3). |
 | **Lint / Format** | Biome | `biome <cmd>` | Single Rust binary; replaces ESLint/Prettier with 0 Node module bloat. |
 | **Dep Alignment** | Syncpack | `syncpack <cmd>` | Enforces the Single Version Policy across all `package.json` files, internal and tooling. |
-| **Dead Code Sweep** | Knip | `knip` | Reads `knip.json`; spawn-only entrypoints (engine/dashboard launched by e2e) are declared as `entry` so they are not flagged dead. |
+| **Dead Code Sweep** | Knip | `knip` | Reads `knip.json`; app entrypoints + Playwright specs are declared as `entry` so they are not flagged dead. |
 | **Secrets Engine** | dotenvx | `dotenvx run -- <cmd>` | Encrypts `.env` for safe public commit; injects decrypted values at process runtime. Single pinned version — never via `bunx`. |
 | **Secret Sweeper** | Secretlint | `secretlint` | Honors `.secretlintignore`; blocks commits containing unencrypted private keys or broker tokens. |
 | **Versioning / Release** | Changesets | `changeset` / `changeset version` | Drives `release.yml`. Bun-compatible publish flow. |
 | **Unit / Integration** | Vitest + MSW (Node/Bun) | `vitest` / `bun test` | See §4. MSW network interception parity across Bun vs. Node is a **matrix-verified** assumption, not assumed equal. |
-| **Property Testing** | fast-check | imported in `*.prop.test.ts`; run by Vitest / `bun test` | Runner-neutral (works under both runners). Generates randomized inputs for `@repo/core` indicators — see §4. |
-| **E2E Browser** | Playwright | `node .../cli.js` | Force-routed through Node.js to bypass Bun Windows UI-thread timeouts. |
+| **Property Testing** | fast-check | imported in `*.prop.test.ts`; run by Vitest / `bun test` | Runner-neutral (works under both runners). Generates randomized inputs for `@repo/backend` indicators — see §4. |
+| **E2E Browser** | Playwright | `node .../cli.js` | Targets **frontend + processmanager** (§4). Force-routed through Node.js to bypass Bun Windows UI-thread timeouts. |
 | **Local Gatekeeper** | Lefthook | `lefthook` | Installed automatically (§10): listed in `trustedDependencies` **and** wired to a root `prepare` script so hooks land in `.git/hooks` on a fresh `bun install`. |
 
 ## 4. Runtime & Platform Target Matrix
 
 | Workspace | Internal Name | Primary Runtime | Permitted Runtimes | Target OS | Local-on-Windows? |
 | --- | --- | --- | --- | --- | --- |
-| `apps/engine` | `@repo/engine` | Bun | Bun | Linux | No → WSL2 / CI (§8) |
-| `apps/dashboard` | `@repo/dashboard` | Bun | Bun, Node | Windows, Linux, macOS | Yes |
-| `apps/e2e` | `@repo/e2e` | Node | Node | Linux (CI), Windows (Local) | Yes |
-| `packages/core` | `@repo/core` | Bun | Bun, Node | Agnostic | Yes |
+| `apps/backend` | `@repo/backend` | Bun | Bun | Deploy: **linux-x64** | Yes (win32-x64 corelib binary) |
+| `apps/frontend` | `@repo/frontend` | Bun | Bun, Node | Windows, Linux, macOS | Yes |
+| `apps/processmanager` | `@repo/processmanager` | Bun | Bun | Deploy: **linux-x64** | Yes (win32-x64 corelib binary) |
 | `packages/types` | `@repo/types` | n/a (types only) | Agnostic | Agnostic | Yes |
-| *(external)* `@ckir/corelib` | `@ckir/corelib` | Bun/Node | Bun, Node | **linux-x64**, win32-x64, darwin-x64/arm64 | Yes (win32-x64 binary); engine → WSL2/CI (§11) |
+| *(external)* `@ckirg/corelib` | `@ckirg/corelib` | Bun/Node | Bun, Node | **linux-x64**, win32-x64, darwin-x64/arm64 | Yes (win32-x64 binary) |
 
 ### Multi-runtime test execution (replaces the v1.0.0 "single unified Vitest" claim)
 
@@ -129,21 +140,21 @@ Two layers differ and are handled separately:
   (native in Node; provided by Bun). Do **not** import `expect` from `vitest` (breaks under
   `bun test`) or from `bun:test` (breaks under Node).
 - **Test declaration** (`test`/`describe`) — each runner supplies its own (`vitest` vs `bun:test`).
-  A minimal internal `@repo/test-harness` shim re-exports the correct `test`/`describe` per runtime
-  so `@repo/core` test files import one neutral module.
+  A minimal `test-harness` shim (implemented at `apps/backend/src/test-harness.ts`) detects the runtime
+  and re-exports the correct `test`/`describe` so the shared suite imports one neutral module.
 
 The shared suite is then executed by the **native runner per runtime**:
 
 - **Node** → `vitest` (config: `vitest.workspace.ts`)
 - **Bun** → `bun test`
 
-> **Property-based testing (`fast-check`, §3):** `@repo/core` indicators/math are additionally
+> **Property-based testing (`fast-check`, §3):** `@repo/backend` indicators/math are additionally
 > exercised with randomized inputs (NaN, zero-tick, extreme spikes, ordering) to prove they never
 > emit impossible states (negative balances, silent `NaN`) — unit tests only cover *imagined* cases.
 > `fast-check` is runner-neutral, so the same `*.prop.test.ts` files run under both Vitest and
-> `bun test` via the `@repo/test-harness` shim, and are matrix-verified like the rest of the suite.
+> `bun test` via the `test-harness` shim, and are matrix-verified like the rest of the suite.
 
-> **Deno dropped (decided):** Deno is no longer a permitted runtime for `@repo/core`. This avoids
+> **Deno dropped (decided):** Deno is no longer a permitted runtime for `@repo/backend`. This avoids
 > the runner-neutrality cost and sidesteps Deno's weak NAPI support — relevant because the corelib
 > database layer ships a native `.node` addon (§11) that Deno cannot reliably load.
 
@@ -155,8 +166,7 @@ All internal workspace linking must use the explicit workspace wildcard protocol
 
 ```json
 "dependencies": {
-  "@repo/types": "workspace:*",
-  "@repo/core": "workspace:*"
+  "@repo/types": "workspace:*"
 }
 ```
 
@@ -165,7 +175,7 @@ All internal workspace linking must use the explicit workspace wildcard protocol
 When adding a third-party package to a workspace, the engineer or agent must explicitly declare the target filter:
 
 ```bash
-bun --filter @repo/engine add nanoid
+bun --filter @repo/backend add nanoid
 ```
 
 ### Toolchain Pinning (SVP for build tools)
@@ -221,7 +231,7 @@ When Claude Code attaches to this workspace, it is bound by the following operat
 - **DO NOT** write Windows PowerShell or Linux Bash specific wrappers. Use standard Bun shell syntax, and keep Turbo-invoked scripts free of shell builtins (Axiom 3).
 - **DO NOT** introduce `bunx <tool>` into committed scripts — add the tool as a pinned root `devDependency` and call its binary (§5).
 - **DO NOT** touch `.env.keys`, and **DO NOT** gitignore `.env`. If a new secret is needed: add the blank key to `.env.example`, put a dummy test value in `.env`, then run `bun run dotenvx -- encrypt` and commit the encrypted `.env`.
-- When asked to build or test a single package, use Turborepo filters: `turbo run test:unit --filter=@repo/core`.
+- When asked to build or test a single package, use Turborepo filters: `turbo run test:unit --filter=@repo/backend`.
 
 > **Agent code-navigation (Serena / LSP MCP):** for any cross-workspace refactor (touching
 > `apps/` + `packages/`), agents must prefer the **Serena MCP server** (LSP-backed) for *semantic*
@@ -229,20 +239,19 @@ When Claude Code attaches to this workspace, it is bound by the following operat
 > symbol resolution sharply reduces hallucinated/partial edits during renames and signature changes.
 > This mirrors corelib's setup (Serena is already wired there).
 
-## 8. Local Development Boundaries (DECIDED: engine is push-to-CI only)
+## 8. Local Development Boundaries (DECIDED: all apps run locally on Windows)
 
-`@repo/engine` targets Linux and is **not run locally at all** — neither on the Windows host nor in
-WSL2. Engineers develop engine *code* locally (editing, typecheck, unit tests of pure logic) but
-**execution/integration happens in CI** (§10). This keeps the host clean (Axiom 1) and avoids
-maintaining a local Linux runtime.
+Because `@ckirg/corelib` ships a **win32-x64** native binary, all three apps — `@repo/backend`,
+`@repo/frontend`, `@repo/processmanager` — **run locally on the Windows host** (editing, typecheck,
+unit/property tests, and execution). This supersedes the earlier "engine is push-to-CI only" rule;
+there is no longer a Linux-only `engine` workspace.
 
-- **Runs natively on the Windows host:** `@repo/core`, `@repo/types`, `@repo/dashboard`, and unit
-  tests. On Windows the `win32-x64` corelib native binary is fetched, which is fine for these.
-- **Runs only in CI:** `@repo/engine` (and any engine integration that needs the `linux-x64` corelib
-  binary + live services). Push and let CI exercise it.
-
-Implication: the engine inner loop is intentionally slower (CI round-trip). If that becomes painful,
-revisit a WSL2 path — but that is **out of scope** by current decision.
+- **Runs natively on the Windows host:** all apps + `@repo/types` + the full unit/property suite. The
+  `win32-x64` corelib binary is provisioned during `bun install`.
+- **CI still owns the full matrix:** the Linux/macOS × Bun/Node permutations and headless Playwright
+  run in GitHub Actions (§10), not on the host.
+- **Deploy target is `linux-x64`** for `@repo/backend` and `@repo/processmanager` (corelib ships no
+  `linux-arm64` binary — §11.3). Live broker integration needing real services still runs in CI.
 
 ## 9. Root Execution Map (`package.json`)
 
@@ -252,8 +261,9 @@ The top-level `package.json` exposes these strict, platform-agnostic automation 
 {
   "scripts": {
     "prepare": "lefthook install",
-    "dev:engine": "dotenvx run -- bun --filter @repo/engine start",
-    "dev:dashboard": "dotenvx run -- bun --filter @repo/dashboard dev",
+    "dev:backend": "dotenvx run -- bun --filter @repo/backend start",
+    "dev:frontend": "dotenvx run -- bun --filter @repo/frontend dev",
+    "dev:processmanager": "dotenvx run -- bun --filter @repo/processmanager start",
     "build": "turbo run build",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -263,77 +273,65 @@ The top-level `package.json` exposes these strict, platform-agnostic automation 
     "secure": "secretlint \"**/*\"",
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",
-    "test:e2e": "dotenvx run -- bun --filter @repo/e2e run test",
-    "test:e2e:ui": "dotenvx run -- bun --filter @repo/e2e run test:ui",
+    "test:e2e": "dotenvx run -- turbo run test:e2e",
+    "test:e2e:ui": "dotenvx run -- turbo run test:e2e:ui",
     "dotenvx": "dotenvx",
     "gatekeeper": "bun run secure && bun run sync:check && bun run lint && bun run sweep && turbo run typecheck test:unit"
   },
-  "trustedDependencies": ["lefthook", "@ckir/corelib"]
+  "trustedDependencies": ["lefthook", "@ckirg/corelib"]
 }
 ```
 
-> **`@ckir/corelib` must be trusted (§11):** Bun blocks dependency `postinstall` scripts by default.
+> **`@ckirg/corelib` must be trusted (§11):** Bun blocks dependency `postinstall` scripts by default.
 > corelib's postinstall downloads its native Rust binary, so without trusting it the binary is never
-> placed and engine code throws "module not found" at runtime. Same failure class as lefthook.
+> placed and app code throws "module not found" at runtime. Same failure class as lefthook.
 
 > **Fail-fast ordering (was backwards in v1.0.0):** the gatekeeper now runs the cheap, deterministic
 > gates first — secrets → version policy → lint → dead-code — before the expensive typecheck/test
 > matrix. `sweep` (Knip) is now part of the **local** gatekeeper, not CI-only, so dead-code
 > failures surface in seconds locally.
 
-> **E2E invocation (Bun has no `exec` subcommand):** `bun --filter <pkg> run <script>` is the only
-> valid form — `bun --filter @repo/e2e exec` would look for a script named `exec` and fail. The
-> node-routed Playwright launch therefore lives **inside `apps/e2e/package.json`**, not the root:
-> `"test": "node node_modules/@playwright/test/cli.js test"` and
-> `"test:ui": "node node_modules/@playwright/test/cli.js test --ui"`. The root `test:e2e` wraps it
-> with `dotenvx run` once; CI calls `bun run test:e2e` (no second wrap — see §6/§10).
+> **E2E invocation (Bun has no `exec` subcommand):** the node-routed Playwright launch lives **inside
+> each app's `package.json`** (`apps/frontend`, `apps/processmanager`) as a `test:e2e` script —
+> `"test:e2e": "node node_modules/@playwright/test/cli.js test"` — never as a root `bun --filter … exec`
+> (Bun would look for a script literally named `exec` and fail). The root `test:e2e` fans out via
+> `turbo run test:e2e` wrapped in `dotenvx run` **once**; CI calls `bun run test:e2e` (no second wrap —
+> §6/§10). Exact Playwright targets/specs for frontend + processmanager are deferred to a brainstorming.
 
 ## 10. Continuous Integration Cloud Pipeline
 
-### Job 0 (shared bootstrap): corelib provisioning
+All jobs use the corelib action pins mirrored from corelib's own pipeline: `actions/checkout@v6`,
+`oven-sh/setup-bun@v2`, `actions/setup-node@v6` (node 24), `actions/upload-artifact@v7` /
+`download-artifact@v8`, `softprops/action-gh-release@v2`.
 
-Every job that installs dependencies must first provision corelib from `github.com/ckir/corelib`
-(it is **not** on a registry — see §11.2). Steps:
+### Job 1: Clean-Room Gatekeeper (Ubuntu)
 
-1. Checkout `ckir/corelib` to a **sibling path** (`../corelib`), pinned to the exact **commit SHA**
-   matching the version tstrader expects (§11.4).
-2. Build it with **its own** toolchain (`pnpm install && pnpm build-all`). This pnpm invocation is
-   corelib's, in a separate checkout — it does **not** violate tstrader's host "no pnpm" axiom (§7),
-   which governs *tstrader's* workspace only. (For the tarball flow, also `pnpm pack` the needed
-   packages here — §11.2.)
-3. tstrader's `package.json` already resolves corelib via `file:../corelib/ts-core` (or the packed
-   tarball), so the next step's install wires it up with no symlink hacks.
+corelib is now a **published npm package** (`@ckirg/corelib` — §11.2), so there is **no Job 0 /
+sibling checkout**. The install is a plain registry install; because `@ckirg/corelib` is in
+`trustedDependencies` (§9) its postinstall fetches the native binary during install, and the env
+override defeats the CI self-skip:
 
-### Job 1: Clean Room Gatekeeper (Ubuntu)
+```bash
+GITHUB_ACTIONS= MODE=production bun install --frozen-lockfile
+```
 
-- Provisions corelib (Job 0).
-- Runs the install with the native binary provisioned in one shot — `@ckir/corelib` is in
-  `trustedDependencies` (§9), so its `postinstall` fires during install; the env override defeats the
-  CI self-skip:
-
-  ```bash
-  GITHUB_ACTIONS= MODE=production bun install --frozen-lockfile
-  ```
-
-- Runs `bun run secure`.
-- Runs `bun run sync:check`.
-- Runs `bun run lint`.
-- Runs `bun run sweep`.
+- `checkout@v6` → `setup-bun@v2` → `setup-node@v6` (node 24).
+- Runs `bun run secure` → `sync:check` → `lint` → `sweep` (fail-fast order).
 
 ### Job 2: The Multi-Runtime Matrix
 
-- **Trigger:** Requires Job 1 success.
+- **Trigger:** requires Job 1.
 - **Matrix Grid:** `os: [ubuntu-latest, windows-latest, macos-latest]` × `runtime: [bun, node]`.
-- **Runner selection:** `bun → bun test`, `node → vitest` (§4) against the shared `@repo/core` suite. Runtimes are installed per-job on the runner (never on the local host — Axiom 1 is a *host* policy, not a CI policy).
-- **Execution:** Runs `@repo/core` math/indicator tests across all 6 OS/Runtime permutations.
+- **Runner selection:** `bun → bun test`, `node → vitest` (§4) against the shared `@repo/backend`
+  suite. Runtimes are installed per-job on the runner (Axiom 1 is a *host* policy, not a CI policy).
 
 ### Job 3: Headless Playwright Verification
 
-- **Trigger:** Requires Job 1 success.
-- **Environment:** `ubuntu-latest` inside standard Node.js runner.
-- **corelib:** Provisions corelib (Job 0) with the **`linux-x64`** native binary — the only Linux arch corelib ships (§11).
-- **Decryption:** Pulls `DOTENV_PRIVATE_KEY` to decrypt the **committed** encrypted `.env`.
-- **Execution:** Spawns `@repo/dashboard` and `@repo/engine` in the background, runs full Chromium/WebKit/Firefox E2E sweeps against the live UI.
+- **Trigger:** requires Job 1.
+- **Environment:** `ubuntu-latest`; provisions the **`linux-x64`** corelib binary during install.
+- **Decryption:** pulls `DOTENV_PRIVATE_KEY` to decrypt the **committed** encrypted `.env`.
+- **Execution:** runs `bun run test:e2e` (Playwright for **frontend + processmanager**). Exact specs
+  are deferred to the e2e brainstorming.
 
 ### Cache Correctness (Turbo ↔ dotenvx)
 
@@ -349,13 +347,12 @@ the cache key, preventing stale "pass" results:
     "test:e2e": {
       "env": ["NODE_ENV", "APP_ENV"],
       "inputs": [
-        "apps/e2e/**",
-        "apps/dashboard/dist/**",
-        "apps/engine/dist/**",
+        "apps/frontend/**",
+        "apps/processmanager/**",
         ".env",
         "playwright.config.*"
       ],
-      "outputs": ["apps/e2e/playwright-report/**", "apps/e2e/test-results/**"],
+      "outputs": ["**/playwright-report/**", "**/test-results/**"],
       "dependsOn": ["^build"]
     }
   }
@@ -363,7 +360,7 @@ the cache key, preventing stale "pass" results:
 ```
 
 > **E2E is cached on deterministic inputs (decided):** rather than `cache: false`, `test:e2e` hashes
-> the e2e sources, the **built** dashboard/engine artifacts (`dist`), the encrypted `.env`, and the
+> the e2e sources, the **built** frontend/processmanager artifacts, the encrypted `.env`, and the
 > Playwright config, and depends on upstream `build`. Determinism is enforced at the test layer:
 > Playwright pins browser versions, network is mocked/seeded (no live broker calls in E2E — those
 > stay in dedicated live-integration runs), and clocks/seeds are fixed. Any non-determinism that
@@ -378,9 +375,9 @@ publishes three packages, all version-locked together:
 
 | Package | Role in tstrader |
 | --- | --- |
-| `@ckir/corelib` (ts-core) | **Database layer** (libSQL/Turso via `@libsql/client`, Postgres via `postgres`), logging (pino), scheduling (croner), plus a **native Rust addon** `corelib-rust.node`. |
-| `@ckir/corelib-markets` (ts-markets) | Market data (yahoo-finance2, protobuf, websockets). |
-| `@ckir/corelib-cloud` (ts-cloud) | Cloud deploy adapters (Cloudflare Workers / AWS Lambda / Cloud Run). |
+| `@ckirg/corelib` (ts-core) | **Database layer** (libSQL/Turso via `@libsql/client`, Postgres via `postgres`), logging (pino), scheduling (croner), plus a **native Rust addon** `corelib-rust.node`. |
+| `@ckirg/corelib-markets` (ts-markets) | Market data (yahoo-finance2, protobuf, websockets). |
+| `@ckirg/corelib-cloud` (ts-cloud) | Cloud deploy adapters (Cloudflare Workers / AWS Lambda / Cloud Run). |
 
 > **Toolchain boundary:** corelib's pnpm/nx is **invisible** to tstrader — tstrader consumes corelib's
 > *built output*, never its source workspaces. The package manager used to *produce* a package does
@@ -390,71 +387,62 @@ publishes three packages, all version-locked together:
 ### 11.1 Database access (DECIDED: no `packages/db`)
 
 The former `packages/db` is **deleted**. Workspaces import the database layer **directly** from
-`@ckir/corelib`. *Tradeoff acknowledged:* this couples every DB consumer to corelib's client surface
+`@ckirg/corelib`. *Tradeoff acknowledged:* this couples every DB consumer to corelib's client surface
 and offers no internal seam for schema/migrations — if that coupling later bites, the remedy is to
 reintroduce a thin `packages/db` adapter (Repository Pattern). For now, per decision, consumers use
 corelib directly.
 
 ### 11.2 Consumption mechanism
 
-corelib is **not published to a registry**. Two non-options to rule out first:
+corelib is **published to npm** as three public packages under the `@ckirg` scope (the `@ckir` scope was
+owned by a different account; the rename to `@ckirg` is what finally unblocked publishing). tstrader
+consumes them as **ordinary registry dependencies** — no sibling checkout, no `file:`/tarball, no Job 0.
 
-- A plain `github:ckir/corelib` dependency string **fails**: git dependencies resolve the
-  *repo-root* `package.json` (the private `corelib-monorepo`), not the `ts-core/` subpackage — and
-  Bun would also try to build the fetched repo, choking on corelib's internal `pnpm workspace:*`
-  links.
-- **`bun link` cannot be the CI mechanism.** If `package.json` pins a registry version, a strict
-  `bun install --frozen-lockfile` tries the npm registry, **404s, and fails even if a link exists**
-  — frozen installs ignore local symlinks.
+**Declared resolution — what `package.json` records and what CI uses:**
 
-**Declared (reproducible) resolution — what `package.json` records and what CI uses:**
+- Pin exact registry versions, e.g. `"@ckirg/corelib": "0.1.22"` (add `-markets`/`-cloud` if/when
+  consumed). A strict `bun install --frozen-lockfile` resolves them from npm normally.
+- `@ckirg/corelib-markets` pulls `@gadicc/yahoo-finance2` via **jsr**, so *only if `-markets` is
+  consumed* the root `.npmrc` needs `@jsr:registry=https://npm.jsr.io`.
+- `@ckirg/corelib` is in `trustedDependencies` (§9) so its postinstall fetches the native binary (§11.3).
 
-- **If only `@ckir/corelib` (ts-core) is consumed:** use the `file:` protocol against a **sibling
-  checkout** — `"@ckir/corelib": "file:../corelib/ts-core"`. ts-core has no `workspace:*` deps, so
-  this resolves cleanly and is honored by `--frozen-lockfile`.
-- **If `@ckir/corelib-markets`/`-cloud` are also consumed:** prefer **tarball pack** — build corelib,
-  `pnpm pack` each needed package (pack **rewrites `workspace:*` → real versions**, which `file:` does
-  not), then `bun add ./ckir-corelib-<ver>.tgz` (etc.). This is the closest equivalent to a real
-  published install and the only mechanism that handles corelib's cross-package `workspace:*` links.
+**Local `bun link` is an optional override, not the source of truth.** Engineers co-developing corelib
+may `bun link` for live edits; the committed `package.json` always carries the reproducible registry pin
+so fresh clones and CI work without any link.
 
-**Local `bun link` is an optional override, not the source of truth.** Engineers actively
-co-developing corelib may `bun link` to get live edits without a rebuild/repack; this overlays the
-declared `file:`/tarball resolution for their working tree only. The committed `package.json` always
-carries the reproducible mechanism so fresh clones and CI work without any link.
+**Reproducibility:** pin an exact corelib version (e.g. `0.1.22`); its GitHub Release holds the matching
+native binary (§11.4), and the lockfile pins the rest.
 
-**Reproducibility:** pin the corelib checkout to an exact **commit SHA** (matching the version whose
-GitHub Release holds the native binary, §11.4) in both the sibling-checkout and tarball flows.
-
-> **[DECISION — needs your confirmation]** This corrects the original "bun link in CI" plan, which
-> cannot satisfy `--frozen-lockfile`. Confirm: do you consume **only `@ckir/corelib`** (→ `file:`
-> sibling checkout) or **also `-markets`/`-cloud`** (→ tarball pack)?
+> **[RESOLVED]** This supersedes the earlier `file:`/tarball + commit-SHA plan, which existed only
+> because corelib was unpublished. The walking skeleton consumes **only `@ckirg/corelib`**; add
+> `-markets`/`-cloud` (+ the `@jsr` `.npmrc` line) when those features are built.
 
 ### 11.3 Native Rust addon (`corelib-rust.node`) — the real constraints
 
-`@ckir/corelib`'s `postinstall` downloads a prebuilt, **per-OS/arch** `.node` binary from corelib's
+`@ckirg/corelib`'s `postinstall` downloads a prebuilt, **per-OS/arch** `.node` binary from corelib's
 GitHub Releases (`v<version>`). This drives several hard rules:
 
-1. **Bun blocks postinstall** → `@ckir/corelib` is in `trustedDependencies` (§9), or the binary is
+1. **Bun blocks postinstall** → `@ckirg/corelib` is in `trustedDependencies` (§9), or the binary is
    never placed and engine code throws at runtime.
 2. **The postinstall self-skips in CI** (`if GITHUB_ACTIONS …`) and when `MODE=development`. Because
    corelib is trusted, the binary is provisioned **during install** — no separate fetch step — by
    running `GITHUB_ACTIONS= MODE=production bun install --frozen-lockfile` (§10, Job 1). Do **not**
    reverse-engineer corelib's internal paths to place the file manually.
 3. **No `linux-arm64` binary exists.** Supported: `win32-x64`, `linux-x64`, `darwin-x64`,
-   `darwin-arm64`. Therefore **`@repo/engine` deploys to `linux-x64` only** — Graviton/Ampere
-   (arm64) Linux targets are **unsupported** until corelib ships an arm64 build.
+   `darwin-arm64`. Therefore **`@repo/backend` and `@repo/processmanager` deploy to `linux-x64` only** —
+   Graviton/Ampere (arm64) Linux targets are **unsupported** until corelib ships an arm64 build.
 4. **`MODE=development` foot-gun:** if a developer has `MODE=development` in their environment or a
    higher-level `.env`, local `bun install` silently skips the download → "module not found" at
    runtime. **Guardrail:** tstrader's `.env`/`.env.example` must never set `MODE=development`, and the
-   engine should **fail fast with a clear error** if `corelib-rust.node` is absent rather than crash
+   apps should **fail fast with a clear error** if `corelib-rust.node` is absent rather than crash
    obscurely on first use.
 5. **Deno is excluded** (§4) partly because it cannot reliably load this NAPI addon.
-6. **Bun NAPI parity is matrix-verified, not assumed:** loading `corelib-rust.node` under Bun must be
-   proven in CI, not taken on faith.
+6. **Bun NAPI parity:** loading `corelib-rust.node` under Bun is **verified** (tested upstream); CI
+   re-confirms it in the matrix.
 
 ### 11.4 Version lockstep
 
-`@ckir/corelib`, `@ckir/corelib-markets`, and `@ckir/corelib-cloud` are released together at one
+`@ckirg/corelib`, `@ckirg/corelib-markets`, and `@ckirg/corelib-cloud` are released together at one
 version, and the native binary's GitHub Release tag tracks that version. Whatever ref CI pins (§11.2)
 must be a single consistent point for all three packages **and** the matching `.node` release.
 
@@ -494,12 +482,12 @@ they are intentionally exempt from the §3 "pinned root `devDependency`" rule.
 
 - ✅ **§4 Deno** — DECIDED: Deno dropped. Matrix is Bun×Node (6 permutations).
 - ✅ **§10 E2E caching** — DECIDED: cache enabled on deterministic inputs (built artifacts + e2e sources + encrypted `.env`).
-- ✅ **§11 packages/db** — DECIDED: deleted; import `@ckir/corelib` directly (coupling tradeoff noted in §11.1).
-- ⚠️ **§11.2 corelib consumption** — CORRECTED: your "bun link in CI" cannot satisfy `--frozen-lockfile` (registry 404). Now: `package.json` declares `file:`/tarball against a sibling checkout (reproducible); `bun link` is an optional **local** override. corelib pinned by commit SHA.
-- ⏳ **§11.2 file: vs tarball** — confirm: consume **only `@ckir/corelib`** (→ `file:` sibling) or **also `-markets`/`-cloud`** (→ tarball pack)?
-- ⏳ **§8 inner loop** — is WSL2 the sanctioned path for engine local dev, or is "push-to-CI only" acceptable? (open)
+- ✅ **§11 packages/db** — DECIDED: deleted; import `@ckirg/corelib` directly (coupling tradeoff noted in §11.1).
+- ✅ **§2/§4 topology** — DECIDED: workspaces are **apps/{backend,frontend,processmanager} + packages/types** (no `packages/core`/`engine`/`dashboard`/`e2e`). Indicator logic lives in backend; all three apps use `@ckirg/corelib`'s `logger` as the common logger. Playwright targets frontend + processmanager.
+- ✅ **§11.2 corelib consumption** — RESOLVED: corelib is **published to npm** (`@ckirg/corelib@0.1.22`), consumed as a plain registry dep; the earlier `file:`/tarball + sibling-checkout + commit-SHA + Job-0 plan is dropped. Skeleton consumes **only `@ckirg/corelib`**; add `-markets`/`-cloud` (+ `@jsr` `.npmrc`) when needed.
+- ✅ **§8 inner loop** — RESOLVED: all three apps **run locally on Windows** (corelib win32-x64 binary); CI keeps the full Linux/macOS matrix; deploy target linux-x64. (WSL2 no longer needed.)
 - ✅ **§12 supply-chain** — DECIDED (defense-in-depth): **Renovate** (updates, SVP/catalog-aware) + **Dependabot alerts** + **CodeQL** (SAST) + **Socket.dev** (malicious-pkg). Dependabot *version- AND security-updates* stay OFF (passive alerts only).
-- ✅ **§3/§4 property testing** — DECIDED: add **fast-check** for `@repo/core` indicators (runner-neutral).
+- ✅ **§3/§4 property testing** — DECIDED: add **fast-check** for `@repo/backend` indicators (runner-neutral).
 - ✅ **§7 agent navigation** — DECIDED: **Serena / LSP MCP** for semantic cross-workspace navigation.
 - ✅ **tooling NOT added (YAGNI)** — `commitlint` (friction > value; note: Changesets changelogs are hand-written, *not* commit-derived, so it isn't strictly redundant — still skipped), `husky` (Lefthook already, Bun-safe), `eslint`/`prettier` (Biome covers both), `publint`/`@arethetypeswrong/cli` (internal `workspace:*` packages aren't npm-published).
 - ⏳ **runtime validation lib** — DEFERRED (your call): **Zod** (Claude's lean — agent-familiarity) vs **ArkType** (agy's lean — perf) vs **Valibot** (smallest bundle), for trust-boundary validation. Revisit when boundary code is written.
