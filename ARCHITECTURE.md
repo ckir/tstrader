@@ -1,6 +1,6 @@
 # TSTRADER — ARCHITECTURE DECISIONS
 
-**Classification:** Public Open-Source **Algorithmic Trading** Monorepo
+**Classification:** Public, Source-Available (Noncommercial — PolyForm NC 1.0.0) **Algorithmic Trading** Monorepo
 **Base conventions:** see [`MONOREPOARCHITECTURE.md`](./MONOREPOARCHITECTURE.md) — the generic, reusable
 modern-TypeScript-monorepo base (how this repo is *run*). **This file records only what is specific to
 tstrader**: its workspaces, its external `corelib` foundation, and the open trading-domain design forks.
