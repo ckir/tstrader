@@ -17,8 +17,6 @@ export type ServiceState =
   | "restarting" // exited unexpectedly, backoff timer pending
   | "crashlooped"; // restart guard tripped; will not auto-restart
 
-export type RestartReason = "housekeeping" | "crash" | "intentional" | "handled-signal";
-
 export interface ServiceStatus {
   name: string;
   state: ServiceState;

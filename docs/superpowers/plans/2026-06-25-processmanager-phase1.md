@@ -152,15 +152,21 @@ The repo runs every suite under **both** vitest and `bun test` (CI matrix). A te
 
 ```ts
 // Cross-runtime test primitives: bun:test under `bun test`, vitest otherwise.
-const RUNNER = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined" ? "bun:test" : "vitest";
-// @vite-ignore — variable specifier; neither runner statically resolves the other.
-const mod = (await import(/* @vite-ignore */ RUNNER)) as {
+// Literal specifiers in each branch (NOT a variable) — vitest 4's module evaluator
+// resolves a *variable* specifier as a relative path and fails; @vite-ignore stops
+// vite from analysing the bun:test specifier at transform time.
+interface TestApi {
   describe: (name: string, fn: () => void) => void;
   it: (name: string, fn: () => void | Promise<void>) => void;
   expect: (actual: unknown) => Record<string, (...args: unknown[]) => unknown>;
   beforeEach: (fn: () => void | Promise<void>) => void;
   afterEach: (fn: () => void | Promise<void>) => void;
-};
+}
+
+const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+const mod = (isBun
+  ? await import(/* @vite-ignore */ "bun:test")
+  : await import("vitest")) as unknown as TestApi;
 
 export const describe = mod.describe;
 export const it = mod.it;
@@ -1792,10 +1798,15 @@ describe("daemon smoke", () => {
 });
 ```
 
-- [ ] **Step 2: Run the smoke test (both runtimes).**
+- [ ] **Step 1b: Exclude the smoke test from vitest (it spawns via `Bun.spawn`, Node-unavailable).** `apps/processmanager/vitest.config.ts` was added in Task 7 to exclude `proc.test.ts`. Add `daemon.smoke.test.ts` to the same `exclude` array — any spec using `Bun.spawn`/`Proc` is **bun-only**:
+```ts
+exclude: ["**/node_modules/**", "**/proc.test.ts", "**/daemon.smoke.test.ts"],
+```
+
+- [ ] **Step 2: Run the smoke test.**
 
 Run: `bun run --filter @repo/processmanager test:unit && bun run --filter @repo/processmanager test:unit:bun`
-Expected: PASS under both.
+Expected: vitest passes with the smoke + proc specs excluded (0 failures); `bun test` runs the smoke test and passes (0 failures). The smoke test executes only under `bun test`.
 
 - [ ] **Step 3: Manual daemon + CLI smoke (one terminal each).**
 

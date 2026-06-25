@@ -2,8 +2,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // proc.test.ts calls Bun.spawn which is unavailable in Node/vitest.
-    // It is covered by test:unit:bun (bun test). Exclude it here.
-    exclude: ["**/node_modules/**", "**/proc.test.ts"],
+    // Specs that call Bun.spawn (via Proc) are unavailable in Node/vitest.
+    // They are covered by test:unit:bun (bun test). Exclude them here.
+    exclude: ["**/node_modules/**", "**/proc.test.ts", "**/daemon.smoke.test.ts"],
   },
 });

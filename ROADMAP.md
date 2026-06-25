@@ -13,15 +13,19 @@ get fleshed out when we reach them. Design records live under [`docs/architectur
 
 Design: [`docs/architecture/processmanager.md`](docs/architecture/processmanager.md).
 
-### Phase 1 — Supervisor + stdout sink + CLI (the loss-proof core) ← start here, keep light
-- Roll-your-own `Bun.spawn` supervisor for `backend` + `frontend`: `start` / `stop` / `restart`.
-- **stdout: pipe + non-blocking drain** (never `ignore`); durable **rotating NDJSON** log writer; PM's own
+### Phase 1 — Supervisor + stdout sink + CLI (the loss-proof core) ✅ DONE
+Implemented via [`docs/superpowers/plans/2026-06-25-processmanager-phase1.md`]; gatekeeper green.
+- [x] Roll-your-own `Bun.spawn` supervisor for `backend` + `frontend`: `start` / `stop` / `restart`.
+- [x] **stdout: pipe + non-blocking drain** (never `ignore`); durable **rotating NDJSON** log writer; PM's own
   logs tagged `service:"pm"`.
-- Exit-code restart semantics (`0`/`1` → restart, `3`/intentional → no) + backoff + crash-loop guard.
-- Autostart; graceful shutdown with a **flush grace-period** before `SIGKILL`; Windows tree-kill.
-- Minimal **REST control API** (Hono, localhost) + a thin **CLI** (`tstrader start|stop|restart|status`).
-- Light typed config to start (JSON5 layering can come in a later pass).
-- **Child-app contract v1** (NDJSON stdout + `SIGTERM`→flush→exit 3) honoured by backend + frontend.
+- [x] Exit-code restart semantics (`0`/`1` → restart, `3`/intentional → no) + backoff + crash-loop guard.
+- [x] Autostart; graceful shutdown with a **flush grace-period** before `SIGKILL`; Windows tree-kill.
+- [x] Minimal **REST control API** (Hono, localhost) + a thin **CLI** (`tstrader start|stop|restart|status`).
+- [x] Light typed config to start — **JSON5 via confbox** (layering deferred to a later pass).
+- [x] **Child-app contract v1** (NDJSON stdout + `SIGTERM`→flush→exit 3) honoured by backend; frontend (vite)
+  supervised **best-effort**.
+- *Deferred to Phase 2:* proper POSIX descendant tree-kill (process-group) — Phase 1 uses direct SIGKILL
+  (single-process deploy targets unaffected; vite is dev-only best-effort).
 
 ### Phase 2 — Diagnostics & status
 - `OutputBuffer` ring per process; 5 s status sampling / history strip.

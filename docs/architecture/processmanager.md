@@ -1,6 +1,6 @@
 # processmanager — Design Record
 
-**Status:** design (spec-level; no code beyond the stub yet). Sequencing lives in [`/ROADMAP.md`](../../ROADMAP.md).
+**Status:** **Phase 1 implemented** (Bun.spawn supervisor + rotating NDJSON sink + restart policy/backoff/crash-loop guard + Hono REST on 127.0.0.1 + `tstrader` CLI + contract-compliant backend `/health`). Phases 2–7 remain design-level. Sequencing lives in [`/ROADMAP.md`](../../ROADMAP.md).
 **Scope:** runtime/ops **tooling** only. Trading-domain logic (kill-switch behaviour, event-sourcing,
 order state) is **out of scope** and belongs to the separate trading brainstorm — this design only leaves
 **seams** for it.
