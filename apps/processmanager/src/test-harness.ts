@@ -1,11 +1,43 @@
 // Cross-runtime test primitives: bun:test under `bun test`, vitest otherwise.
-// Literal specifiers in each branch (NOT a variable) — vitest's module evaluator
-// only resolves the branch it executes; @vite-ignore stops vite from analysing the
-// bun:test specifier at transform time.
+// Literal specifiers in each branch (NOT a variable) — vitest 4's module evaluator
+// resolves a *variable* specifier as a relative path and fails; @vite-ignore stops
+// vite from analysing the bun:test specifier at transform time.
+//
+// `expect` returns a concrete Matchers interface (named methods) rather than an index
+// signature: the repo's `noUncheckedIndexedAccess` would make `Record<string, Fn>[key]`
+// `Fn | undefined`, so `expect(x).toBe(...)` would be "invoke possibly undefined" (TS2722).
+interface Matchers {
+  toBe(expected: unknown): void;
+  toEqual(expected: unknown): void;
+  toStrictEqual(expected: unknown): void;
+  toContain(expected: unknown): void;
+  toContainEqual(expected: unknown): void;
+  toThrow(expected?: unknown): void;
+  toMatch(expected: unknown): void;
+  toMatchObject(expected: unknown): void;
+  toBeGreaterThan(expected: number): void;
+  toBeGreaterThanOrEqual(expected: number): void;
+  toBeLessThan(expected: number): void;
+  toBeLessThanOrEqual(expected: number): void;
+  toBeTruthy(): void;
+  toBeFalsy(): void;
+  toBeNull(): void;
+  toBeUndefined(): void;
+  toBeDefined(): void;
+  toBeNaN(): void;
+  toBeInstanceOf(expected: unknown): void;
+  toHaveLength(expected: number): void;
+  toHaveProperty(key: string, value?: unknown): void;
+  toBeCloseTo(expected: number, numDigits?: number): void;
+  readonly not: Matchers;
+  readonly resolves: Matchers;
+  readonly rejects: Matchers;
+}
+
 interface TestApi {
   describe: (name: string, fn: () => void) => void;
   it: (name: string, fn: () => void | Promise<void>) => void;
-  expect: (actual: unknown) => Record<string, (...args: unknown[]) => unknown>;
+  expect: (actual: unknown) => Matchers;
   beforeEach: (fn: () => void | Promise<void>) => void;
   afterEach: (fn: () => void | Promise<void>) => void;
 }
